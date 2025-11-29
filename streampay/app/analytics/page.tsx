@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useProtocolStats, useActiveStreams } from '@/hooks/useStreamContract';
+import { useKeeperLiveFeed } from '@/hooks/useStreamData';
 import { useFactoryStats } from '@/hooks/useTemplates';
 import { formatWeiToEther } from '@/lib/utils';
 import { 
@@ -60,6 +61,7 @@ export default function AnalyticsPage() {
   const { stats: protocolStats, isLoading: protocolLoading } = useProtocolStats();
   const { stats: factoryStats, isLoading: factoryLoading } = useFactoryStats();
   const { activeStreamIds } = useActiveStreams();
+  const { logs: liveLogs, isConnected } = useKeeperLiveFeed();
 
   return (
     <motion.div
@@ -138,6 +140,61 @@ export default function AnalyticsPage() {
             <p className="text-xs text-muted-foreground">
               Streams from templates
             </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* 🆕 NEW: Live AI Agent Feed */}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="text-yellow-500" /> 
+              Live AI Agent Feed
+              <Badge 
+                variant="outline" 
+                className={isConnected ? "animate-pulse text-green-500 border-green-500" : "text-gray-500"}
+              >
+                {isConnected ? "LIVE via Somnia Streams" : "CONNECTING..."}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Real-time view of AI keeper decision-making process
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {liveLogs.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                Waiting for AI decisions...
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {liveLogs.map((log, i) => (
+                  <div 
+                    key={i} 
+                    className="flex justify-between p-3 bg-muted/50 rounded border-l-4 border-primary"
+                  >
+                    <div>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {new Date(Number(log.timestamp)).toLocaleTimeString()}
+                      </span>
+                      <p className="font-medium mt-1">{log.reason}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Gas: {log.gasPrice.toString()} | Batch Size: {log.batchSize}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={log.decision === 'EXECUTE' ? 'default' : 'secondary'}>
+                        {log.decision}
+                      </Badge>
+                      <div className="text-xs mt-1 font-mono">
+                        Profit: {log.expectedProfit} STT
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
