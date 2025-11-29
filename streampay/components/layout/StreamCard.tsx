@@ -37,8 +37,8 @@ export default function StreamCard({ streamId, isReceived = false }: StreamCardP
   const { balance: realTimeBalance, refetchBalance } = useRealTimeBalance(streamId);
   const { withdrawFromStream, isPending: isWithdrawing } = useWithdrawFromStream();
   const { cancelStream, isPending: isCancelling } = useCancelStream();
-
-  // Use contract balance directly
+  
+  // Use contract balance (Somnia Streams balance updates can be added later)
   const displayBalance = realTimeBalance;
 
   const handleWithdraw = async () => {
