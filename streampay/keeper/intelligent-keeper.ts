@@ -11,6 +11,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { somniaTestnet } from "../lib/contracts"; 
 import { STREAM_PAY_ABI } from "../lib/abis/StreamPay"; 
 import { optimizeBatching, Stream } from "./batch-optimizer";
+import { initializeSDK, publishKeeperLog } from '../lib/streams';
 // import { saveKeeperLog, initializeDatabase } from "../lib/db";
 
 // 1. LOAD ENV VARS
@@ -35,6 +36,9 @@ const walletClient = createWalletClient({
   chain: somniaTestnet,
   transport: http(SOMNIA_RPC_URL)
 });
+
+// Initialize Somnia Streams SDK
+const sdk = initializeSDK(publicClient, walletClient);
 
 console.log("🤖 Intelligent Keeper Agent Started");
 console.log(`🤖 Keeper wallet: ${account.address}`);
@@ -88,17 +92,42 @@ async function runIntelligentKeeper() {
 
       if (!optimization.isProfitable) {
         console.log(`❌ Not profitable: ${optimization.decision}`);
-        // await saveKeeperLog({
-        //   decision: "SKIP",
-        //   reason: optimization.decision,
-        //   gasPrice: gasPrice.toString(),
-        //   timestamp: new Date(),
-        // });
+        
+        // 🆕 NEW: Publish SKIP decision to Data Stream
+        try {
+          const txHash = await publishKeeperLog(sdk, {
+            timestamp: BigInt(Date.now()),
+            decision: "SKIP",
+            gasPrice: gasPrice,
+            expectedProfit: "0",
+            batchSize: 0,
+            reason: optimization.decision
+          });
+          console.log(`📝 SKIP decision published to Data Stream (Tx: ${txHash})`);
+        } catch (streamError) {
+          console.error("⚠️ Failed to publish to data stream:", streamError);
+        }
+        
         return;
       }
 
       console.log(`✅ PROFITABLE: ${optimization.decision}`);
       console.log(`💰 Expected profit: $${optimization.totalProfit.toFixed(4)}`);
+
+      // 🆕 NEW: Publish EXECUTE decision to Data Stream
+      try {
+        const txHash = await publishKeeperLog(sdk, {
+          timestamp: BigInt(Date.now()),
+          decision: "EXECUTE",
+          gasPrice: gasPrice,
+          expectedProfit: optimization.totalProfit.toFixed(6),
+          batchSize: optimization.batches.length,
+          reason: optimization.decision
+        });
+        console.log(`📝 EXECUTE decision published to Data Stream (Tx: ${txHash})`);
+      } catch (streamError) {
+        console.error("⚠️ Failed to publish to data stream:", streamError);
+      }
 
       // 5. EXECUTE BATCHES
       for (const batch of optimization.batches) {
