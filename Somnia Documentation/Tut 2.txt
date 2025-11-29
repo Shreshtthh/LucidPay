@@ -1,0 +1,321 @@
+Tut 2
+Build a Realtime On-Chain Game
+Build a Tap-to-Play Onchain Game
+
+This tutorial shows how to build a Tap-to-Play Onchain Game using Somnia Data Streams, where every player’s tap is written directly to the blockchain and the leaderboard updates in realtime.
+
+Each tap is stored onchain as a structured data record following a schema.
+The game uses MetaMask for wallet identity and Somnia Streams SDK to:
+
+Store tap events onchain using sdk.streams.set()
+
+Retrieve and rank all players from onchain data
+
+By the end of this guide, you’ll have:
+- A working Next.js app
+- Onchain data storage using Somnia Data Streams
+- A live leaderboard that reads blockchain state
+- MetaMask integration for identity and transaction signing
+
+Prerequisites
+Node.js 18+ and npm
+
+A funded Somnia Testnet wallet. Kindly get some from the Faucet.
+
+Basic familiarity with TypeScript and Next.js
+
+Project Setup
+Initialize a new Next.js app and install dependencies. Create the app by creating a directory where the app will live
+
+
+Copy
+npx create-next-app@latest somnia-chat --ts --app --no-tailwind
+cd somnia-chat
+Install the Somnia Streams and ViemJS dependencies
+
+
+Copy
+npm i @somnia-chain/streams viem
+Create a .env.local file for storing secrets and environmental variables
+
+
+Copy
+NEXT_PUBLIC_PUBLISHER_ADDRESS=0xb6e4fa6ff2873480590c68D9Aa991e5BB14Dbf03
+NEXT_PUBLIC_RPC_URL=https://dream-rpc.somnia.network
+Never expose PRIVATE_KEY to the browser. Keep all publishing code in API routes or server code only. NOTE: You can connect a Privy Wallet (or equivalent) to the SDK, avoiding the need entirely for private keys.
+
+Define Tap Schema
+Create a file lib/schema.ts:
+
+
+Copy
+// lib/schema.ts
+export const tapSchema = 'uint64 timestamp, address player'
+This schema defines the structure of each tap event:
+
+timestamp: when the tap occurred
+
+player: who tapped (wallet address)
+
+A nonce will be added when the schema is deployed to ensures each record is unique
+
+The Schema ID will be automatically computed by the SDK from this schema.
+
+Setup Clients
+Create lib/serverClient.ts for server-side reads:
+
+
+Copy
+// lib/serverClient.ts
+import { createPublicClient, http } from 'viem'
+import { somniaTestnet } from 'viem/chains'
+
+export function getServerPublicClient() {
+  return createPublicClient({
+    chain: somniaTestnet,
+    transport: http(process.env.RPC_URL || 'https://dream-rpc.somnia.network'),
+  })
+}
+Create lib/clients.ts for client-side access:
+
+
+Copy
+// lib/clients.ts
+'use client'
+import { createPublicClient, http } from 'viem'
+import { somniaTestnet } from 'viem/chains'
+
+export function getPublicHttpClient() {
+  return createPublicClient({
+    chain: somniaTestnet,
+    transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://dream-rpc.somnia.network'),
+  })
+}
+Writing Tap Data Onchain
+Each tap is recorded onchain with the sdk.streams.set() method. In this section, we’ll walk through how each part of the sendTap() logic works from wallet connection to writing structured schema data onchain.
+
+Set up state variables
+We’ll start by tracking a number of states, such as:
+
+the connected wallet address
+
+the wallet client (MetaMask connection)
+
+and a few helper states for loading, cooldowns, and errors.
+
+
+Copy
+const [address, setAddress] = useState('')
+const [walletClient, setWalletClient] = useState<any>(null)
+const [cooldownMs, setCooldownMs] = useState(0)
+const [pending, setPending] = useState(false)
+const [error, setError] = useState('')
+These ensure that you can access the connected wallet address (address) and track transaction state (pending). It also prevents spam taps with a 1-second cooldown (cooldownMs)
+
+Connect MetaMask
+We use the browser’s window.ethereum API to connect to MetaMask.
+Once connected, we create a wallet client that Somnia’s SDK can use for signing transactions.
+
+
+Copy
+async function connectWallet() {
+  if (typeof window !== "undefined" && window.ethereum !== undefined)
+    try {
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const walletClient = createWalletClient({
+          chain: somniaDream,
+          transport: custom(window.ethereum),
+      });
+      const [account] = await walletClient.getAddresses();
+      setWalletClient(walletClient)
+      setAddress(account)
+    } catch (e: any) {
+      setError(e?.message || String(e))
+    }  setWalletClient(wallet)
+}
+createWalletClient from Viem wraps MetaMask into a signer object that the Somnia SDK can use.
+This is how the UI and the blockchain are bridged securely.
+
+Initialize the SDK
+The Somnia Data Streams SDK provides methods to compute schema IDs, encode structured data, and publish to the blockchain. We initialize it with both the public client (for chain access) and the wallet client (for signing transactions).
+
+
+Copy
+const sdk = new SDK({
+  public: getPublicHttpClient(),
+  wallet: walletClient,
+})
+This gives you full read/write access to the Somnia Streams contract on Somnia Testnet.
+
+Compute the Schema ID
+Schemas define how the onchain data is structured. In this case, the tap schema looks like this:
+
+
+Copy
+tapSchema = 'uint64 timestamp, address player'
+Before writing data, we must compute its unique Schema ID:
+
+
+Copy
+const schemaId = await sdk.streams.computeSchemaId(tapSchema)
+This produces a deterministic ID derived from the schema text, ensuring that any app using the same schema can read or decode your data.
+
+Register the Schema
+
+Copy
+// Register schema
+  const schemaId = await sdk.streams.computeSchemaId(chatSchema)
+  const isRegistered = await sdk.streams.isDataSchemaRegistered(schemaId)
+  if (!isRegistered) {
+    const ignoreAlreadyRegistered = true
+    const txHash = await sdk.streams.registerDataSchemas(
+      [{ schemaName: 'tap', schema: tapSchema, parentSchemaId: zeroBytes32 }],
+      ignoreAlreadyRegistered
+    )
+    if (!txHash) throw new Error('Failed to register schema')
+    await waitForTransactionReceipt(getPublicHttpClient(), { hash: txHash })
+  }
+If this schema wasn’t registered yet, we register it once. It’s safe to call this before sending the first message.
+
+Encode the Data
+Somnia Streams stores structured data using its SchemaEncoder class. We create an encoder and provide each field according to the schema definition.
+
+
+Copy
+const encoder = new SchemaEncoder(tapSchema)
+const now = BigInt(Date.now())
+
+const data = encoder.encodeData([
+  { name: 'timestamp', value: now, type: 'uint64' },
+  { name: 'player', value: address, type: 'address' },
+])
+This converts your JavaScript values into the precise binary format that can be stored onchain and later decoded.
+
+Generate a Unique Data ID
+Each record needs a unique identifier within the schema. We use the keccak256 hash of the player’s address and timestamp to ensure that it is packed into 32 bits of data.
+
+
+Copy
+const id = keccak256(toHex(`${address}-${Number(nonce)}`))
+This ensures no two taps collide, even if the same player taps rapidly.
+
+Store the Tap Onchain
+Finally, we push the structured data to the blockchain using:
+
+
+Copy
+await sdk.streams.set([{ id, schemaId, data }])
+The set() method writes one or more records (called Data Streams) to the chain.
+Each record is cryptographically signed by the player’s wallet, and gets stored on Somnia’s decentralized data infrastructure. It can also be retrieved instantly using the same schema
+
+Manage Cooldowns and Feedback
+After the tap is sent, we apply a 1-second cooldown to avoid flooding transactions and reset the pending state.
+
+
+Copy
+setCooldownMs(1000)
+setPending(false)
+This gives players a smooth UX while maintaining blockchain transaction integrity.
+
+Putting It All Together
+Here’s the complete sendTap() method with all steps combined:
+
+
+Copy
+async function sendTap() {
+  if (!walletClient || !address) return
+  setPending(true)
+
+  const sdk = new SDK({ public: getPublicHttpClient(), wallet: walletClient })
+  const schemaId = await sdk.streams.computeSchemaId(tapSchema)
+  const encoder = new SchemaEncoder(tapSchema)
+  const now = BigInt(Date.now())
+
+  const data = encoder.encodeData([
+    { name: 'timestamp', value: now, type: 'uint64' },
+    { name: 'player', value: address, type: 'address' },
+  ])
+
+  const id = keccak256(toHex(`${address}-${Number(now)}`))
+  await sdk.streams.set([{ id, schemaId, data }])
+  setCooldownMs(1000)
+  setPending(false)
+}
+Complete `page.tsx` Code
+Reading Leaderboard Data Onchain
+The leaderboard is calculated server-side by reading all tap data stored onchain. Create a lib/store.ts file and add the following code:
+
+
+Copy
+lib/store.ts
+import { SDK } from '@somnia-chain/streams'
+import { getServerPublicClient } from './serverClient'
+import { tapSchema } from './schema'
+
+const publisher =
+  process.env.NEXT_PUBLIC_PUBLISHER_ADDRESS ||
+  '0x0000000000000000000000000000000000000000'
+const val = (f: any) => f?.value?.value ?? f?.value
+
+export async function getLeaderboard() {
+  const sdk = new SDK({ public: getServerPublicClient() })
+  const schemaId = await sdk.streams.computeSchemaId(tapSchema)
+  const rows = await sdk.streams.getAllPublisherDataForSchema(schemaId, publisher)
+  if (!Array.isArray(rows)) return []
+
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    const player = String(val(row[1]) ?? '').toLowerCase()
+    if (!player.startsWith('0x')) continue
+    counts.set(player, (counts.get(player) || 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .map(([address, count]) => ({ address, count }))
+    .sort((a, b) => b.count - a.count)
+}
+The leaderboard logic begins inside the getLeaderboard() function, where we use the SDK to read structured tap data directly from the blockchain. First, the function initializes the SDK with a server-compatible public client, which allows read-only access to the chain without a connected wallet. The next step computes the schemaId by passing our tapSchema to sdk.streams.computeSchemaId(). This produces a deterministic identifier that ensures we’re always referencing the correct data structure.
+
+Once the schemaId is known, the core operation happens through sdk.streams.getAllPublisherDataForSchema(schemaId, publisher). This method queries the blockchain for all records written by the specified publisher under that schema. Each returned record is an array of fields that align with the schema’s definition, in this case [timestamp, player]. The helper function val() is then used to unwrap nested field values (f?.value?.value) from the SDK’s response format, giving us clean, readable values.
+
+getAllPublisherDataForSchema acts like a decentralized “SELECT * FROM” query, fetching all onchain data tied to a schema and publisher, while the rest of the function transforms that raw blockchain data into a structured leaderboard the app can display.
+
+Creat a api route to retrieve Leaderboard score. Create the file app/api/leaderboard/route.ts
+
+
+Copy
+import { NextResponse } from 'next/server'
+import { getLeaderboard } from '@/lib/store'
+
+export async function GET() {
+  const leaderboard = await getLeaderboard()
+  return NextResponse.json({ leaderboard })
+}
+This endpoint imports the getLeaderboard() function from lib/store.ts, which handles the heavy lifting of querying Somnia Data Streams, and then exposes that onchain data as a clean, JSON-formatted response for your application. The client simply fetches the leaderboard via /api/leaderboard. 
+
+The page.tsx fetches /api/leaderboard every few seconds to stay updated.
+
+Every tap executes a real blockchain transaction:
+
+Field
+
+Description
+
+timestamp
+
+Time of the tap
+
+player
+
+Wallet address of the player
+
+When the set() call succeeds, Somnia Data Streams stores the record and indexes it under your publisher’s address. Any application (including yours) can then read this data and build dashboards, analytics, or game leaderboards.
+
+Run the App
+
+Copy
+npm run dev
+Open http://localhost:3000 and connect your MetaMask wallet. Click 🖱️ Tap to send onchain transactions, and watch your leaderboard update live.
+
+Conclusion
+You’ve built a fully onchain game where player interactions are stored via Somnia Data Streams and leaderboard rankings are derived from immutable blockchain data. MetaMask provides secure, user-friendly authentication. This same pattern powers realtime Web3 experiences, from social apps to competitive games, using Somnia’s high-performance onchain data infrastructure.

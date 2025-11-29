@@ -79,11 +79,8 @@ export async function publishKeeperLog(
     { name: 'reason', value: data.reason, type: 'string' }
   ]);
 
-  // Generate unique Data ID (primary key)
-  const dataId = toHex(
-    keccak256(new TextEncoder().encode(`keeper-${data.timestamp}-${data.decision}`)),
-    { size: 32 }
-  );
+  // Generate unique Data ID (primary key) - keccak256 already returns a 32-byte Hex
+  const dataId = keccak256(new TextEncoder().encode(`keeper-${data.timestamp}-${data.decision}`));
 
   // Publish to chain
   const txHash = await sdk.streams.set([{
@@ -122,11 +119,8 @@ export async function publishStreamUpdate(
     { name: 'timestamp', value: data.timestamp.toString(), type: 'uint64' }
   ]);
 
-  // Generate unique Data ID
-  const dataId = toHex(
-    keccak256(new TextEncoder().encode(`stream-${data.streamId}-${data.timestamp}`)),
-    { size: 32 }
-  );
+  // Generate unique Data ID - keccak256 already returns a 32-byte Hex
+  const dataId = keccak256(new TextEncoder().encode(`stream-${data.streamId}-${data.timestamp}`));
 
   // Publish to chain
   const txHash = await sdk.streams.set([{

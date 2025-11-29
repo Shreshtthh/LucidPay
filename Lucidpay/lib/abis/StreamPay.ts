@@ -1,4 +1,4 @@
-export const STREAM_PAY_ABI = [
+export const LUCIDPAY_ABI = [
     {
       "inputs": [
         {

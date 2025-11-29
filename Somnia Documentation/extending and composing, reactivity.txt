@@ -1,0 +1,324 @@
+extending and composing, reactivity
+xtending and composing data schemas
+The best blockchain primitives are composable and schemas are no exception. Promoting re-use is a priority
+
+New schemas can extend other schemas by setting a parent schema ID. Remember, you can take any raw schema string and compute a schema ID from it. When registering a new schema that builds upon and extends another, you would specify the raw schema string for the new schema as well as specifying the optional parent schema ID. The parent schema ID will be critical later for deserialising data written to chain. 
+
+For schemas that do not extend other schemas (when nothing is available), then one does not need to specify a parent schema ID or can optionally specify the zero value for the bytes32 solidity type.
+
+For maximum composability, all schemas should be public.
+
+Extension in practice (Example 1)
+
+Copy
+import { SDK } from "@somnia-chain/streams"
+const sdk = new SDK({
+    public: getPublicClient(),
+    wallet: getWalletClient(),
+})
+
+// The parent schema here will be the GPS schema from the quick start guide
+const gpsSchema = `uint64 timestamp, int32 latitude, int32 longitude, int32 altitude, uint32 accuracy, bytes32 entityId, uint256 nonce`
+const parentSchemaId = await sdk.streams.computeSchemaId(gpsSchema)
+
+// Lets extend the gps schema and add F1 data since every car will have a gps position
+const formulaOneSchema = `uint256 driverNumber`
+
+// We can also extend the gps schema for FR data i.e. aircraft identifier
+const flightRadarSchema = `bytes32 ICAO24`
+
+await sdk.streams.registerDataSchemas([
+    { schemaName: "gps", schema: gpsSchema },
+    { schemaName: "f1", schema: formulaOneSchema, parentSchemaId }, // F1 extends GPS
+    { schemaName: "FR", schema: flightRadarSchema, parentSchemaId },// FR extends GPS
+])
+The typescript code shows how two new schemas re-use the GPS schema in order to append an additional field 
+
+Extension in practice (Example 2)
+Versioned schemas
+
+
+Copy
+import { SDK } from "@somnia-chain/streams"
+const sdk = new SDK({
+    public: getPublicClient(),
+    wallet: getWalletClient(),
+})
+
+const versionSchema = `uint16 version`
+const parentSchemaId = await sdk.streams.computeSchemaId(versionSchema)
+
+// Now lets register a person schema with expectation there will be many versions of the person schema
+const personSchema = `uint8 age` 
+await sdk.streams.registerDataSchemas([
+    { schemaName: "version", schema: versionSchema },
+    { schemaName: "person", schema: personSchema, parentSchemaId }
+])
+Client's that are reading data associated with the derived schemas, use the SDK to get the fully decoded data since data is retrieved by schema ID (See getByKey from the quick start guide). Essentially the SDK does a number of the following pseudo steps:
+
+Fetch schema and recursively fetch parent schema until the end of the chain is reached
+
+Join all schemas together seperated by comma
+
+Spin up the decoder and pass through the raw data stored on-chain
+
+Return the decoded data to the caller
+
+
+
+Reactivity
+
+Somnia Data Streams Reactivity
+How Somnia Data Streams Reactivity through a publisher and subscriber lens
+
+Reactivity background
+Consider this scenario: Alice transfers 5 USDC to Bob on an arbitrary EVM chain. Alice interacts with the USDC ERC20 smart contract which does two things:
+
+Update state (of both Alice and Bob) and,
+
+Emit a Transfer(from, to, value) event
+
+Now, enter the humble ERC indexer. The humble indexer tries to does its best to work with an EVM node to walk the chain and make note of the Transfer events it cares about. The humble indexer can have many observers that will pull the data for either display or to do something else with the data (arbitrary logic).  Indexers come in many shapes and forms and additional tooling has to be built ontop of indexers to be notified about new data present in the indexer. More critically, if an observer wants to cross check the indexer against chain data directly from another node, additional work needs to be done increasing the number of round trips to the node not to mention other edge cases that need to be considered.
+
+Reactivity allows one to express the following:
+
+
+Copy
+When X event is emitted by Y contract,
+invoke my client with data from a view function on Z contract I specify
+This collapses the number of round trips to the node and allows users to get faster confirmations about their actions. It does not completely remove the need for an indexer but simplifies the requirements. 
+
+As you can see, reactivity hooks into events as a core primitive for other subscribers to take advantage of Etherbase reactivity.
+
+Writing data, events and reacting
+The scenario mentioned above is a very standard scenario when it comes to generally writing data to chain i.e. publishing state and emitting an event (also known as a log).
+
+When using the chain to write arbitrary data and emit an event, each time you do that Etherbase offers you the tooling to do this without the requirements of having to write your own custom Solidity contract. This also allows you to take advantage of existing schemas for publishing data allowing multiple applications to benefit from composability and data sharing for better interoperability. 
+
+Example:
+
+
+Copy
+import { SDK } from "@somnia-chain/streams"
+import { zeroAddress, erc721Abi } from "viem"
+
+// Use WebSocket transport in the public client for subscription tasks
+// For the SDK instance that executes transactions, stick with htttp
+const sdk = new SDK({
+    public: getPublicClient(),
+    wallet: getWalletClient(),
+})
+
+// Encode view function calls to be executed when an event takes place
+const ethCalls = [{
+    to: "0x23B66B772AE29708a884cca2f9dec0e0c278bA2c",
+    data: encodeFunctionData({
+        abi: erc721Abi,
+        functionName: "balanceOf",
+        args: ["0x3dC360e0389683cA0341a11Fc3bC26252b5AF9bA"]
+    })
+}]
+
+// Start a subsciption
+const subscription = await sdk.streams.subscribe({
+    somniaStreamsEventId: "Firework",
+    ethCalls,
+    onData: (data) => {
+        const decodedLog = decodeEventLog({
+            abi: fireworkABI,
+            topics: data.result.topics,
+            data: data.result.data,
+        });
+
+        const decodedFunctionResult = decodeFunctionResult({
+            abi: erc721Abi,
+            functionName: 'balanceOf',
+            data: data.result.simulationResults[0],
+        });
+
+        console.log("Decoded event", decodedLog);
+        console.log("Decoded function call result", decodedFunctionResult);
+    }
+})
+
+// Write data and emit events that will trigger the above callback!
+const dataStreams = [{
+    id,
+    schemaId: driverSchemaId,
+    data: encodedData
+}]
+
+const eventStreams = [{
+    id: somniaStreamsEventId,
+    argumentTopics,
+    data
+}]
+
+const setAndEmitEventsTxHash = await sdk.streams.setAndEmitEvents(
+    dataStreams,
+    eventStreams
+)
+Writing data and emitting events will trigger a call back to subscribers that care about a specified event emitted from the Somnia Data Streams protocol (or any contract for that matter) without having the need to poll the chain. It follows the observer pattern meaning push rather than pull which is always a more efficient paradigm. 
+
+
+Streams Case Study: Formula 1
+Streaming data from OpenF1 on-chain and building reactive applications
+
+Schemas
+Driver schema
+
+
+Copy
+uint32 number, string name, string abbreviation, string teamName, string teamColor
+Cartesian 3D coordinates schema
+
+
+Copy
+int256 x, int256 y, int256 z
+The driver schema can extend the cartesian coordinates since the 3D coordinates will be used widely for other applications. Again this promotes re-usability of schemas.
+
+Schema registration and re-use
+
+Copy
+const { SDK, zeroBytes32, SchemaEncoder } = require("@somnia-chain/streams");
+const {
+    createPublicClient,
+    http,
+    createWalletClient,
+    toHex,
+    defineChain,
+} = require("viem");
+const { privateKeyToAccount } = require("viem/accounts");
+
+const dreamChain = defineChain({
+  id: 50312,
+  name: "Somnia Testnet",
+  network: "testnet",
+  nativeCurrency: {
+    decimals: 18,
+    name: "STT",
+    symbol: "STT",
+  },
+  rpcUrls: {
+    default: {
+      http: [
+        "https://dream-rpc.somnia.network",
+      ],
+    },
+    public: {
+      http: [
+        "https://dream-rpc.somnia.network",
+      ],
+    },
+  },
+})
+
+async function main() {
+    // Connect to the blockchain to read data with the public client
+    const publicClient = createPublicClient({
+      chain: dreamChain,
+      transport: http(),
+    })
+
+    const walletClient = createWalletClient({
+      account: privateKeyToAccount(process.env.PRIVATE_KEY),
+      chain: dreamChain,
+      transport: http(),
+    })
+
+    // Connect to the SDK
+    const sdk = new SDK({
+      public: publicClient,
+      wallet: walletClient,
+    })
+
+    // Setup the schemas
+    const coordinatesSchema = `int256 x, int256 y, int256 z`
+    const driverSchema = `uint32 number, string name, string abbreviation, string teamName, string teamColor`
+
+    // Derive Etherbase schema metadata
+    const coordinatesSchemaId = await sdk.streams.computeSchemaId(
+      coordinatesSchema
+    )
+    if (!coordinatesSchemaId) {
+      throw new Error("Unable to compute the schema ID for the coordinates schema")
+    }
+
+    const driverSchemaId = await sdk.streams.computeSchemaId(
+      driverSchema
+    )
+    if (!driverSchemaId) {
+      throw new Error("Unable to compute the schema ID for the driver schema")
+    }
+
+    const extendedSchema = `${driverSchema}, ${coordinatesSchema}`
+    console.log("Schemas in use", {
+      coordinatesSchemaId,
+      driverSchemaId,
+      coordinatesSchema,
+      driverSchema,
+      extendedSchema 
+    })
+
+    const isCoordinatesSchemaRegistered = await sdk.streams.isDataSchemaRegistered(coordinatesSchemaId)
+    if (!isCoordinatesSchemaRegistered) {
+      // We want to publish the driver schema but we need to publish the coordinates schema first before it can be extended
+      const registerCoordinatesSchemaTxHash =
+        await sdk.streams.registerDataSchemas([
+          { schemaName: "coords", schema: coordinatesSchema }
+        ])
+
+      if (!registerCoordinatesSchemaTxHash) {
+        throw new Error("Failed to register coordinates schema")
+      }
+      console.log("Registered coordinates schema on-chain", {
+        registerCoordinatesSchemaTxHash
+      })
+
+      await publicClient.waitForTransactionReceipt({ 
+        hash: registerCoordinatesSchemaTxHash
+      })
+    }
+
+    const isDriverSchemaRegistered = await sdk.streams.isDataSchemaRegistered(driverSchemaId)
+    if (!isDriverSchemaRegistered) {
+      // Now, publish the driver schema but extend the coordinates schema!
+      const registerDriverSchemaTxHash = sdk.streams.registerDataSchemas([
+        { schemaName: "driver", schema: driverSchema, parentSchemaId: coordinatesSchemaId }
+      ])
+      if (!registerDriverSchemaTxHash) {
+        throw new Error("Failed to register schema on-chain")
+      }
+      console.log("Registered driver schema on-chain", {
+        registerDriverSchemaTxHash,
+      })
+
+      await publicClient.waitForTransactionReceipt({ 
+        hash: registerDriverSchemaTxHash
+      })
+    }
+
+    // Publish some data!! 
+    const schemaEncoder = new SchemaEncoder(extendedSchema)
+    const encodedData = schemaEncoder.encodeData([
+        { name: "number", value: "44", type: "uint32" },
+        { name: "name", value: "Lewis Hamilton", type: "string" },
+        { name: "abbreviation", value: "HAM", type: "string" },
+        { name: "teamName", value: "Ferrari", type: "string" },
+        { name: "teamColor", value: "#F91536", type: "string" },
+        { name: "x", value: "-1513", type: "int256" },
+        { name: "y", value: "0", type: "int256" },
+        { name: "z", value: "955", type: "int256" },
+    ])
+    console.log("encodedData", encodedData)
+
+    const dataStreams = [{
+      // Data id: DRIVER number - index will be a helpful lookup later and references ./data/f1-coordinates.js Cube 4 coordinates (driver 44) - F1 telemetry data
+      id: toHex(`44-0`, { size: 32 }),
+      schemaId: driverSchemaId,
+      data: encodedData
+    }]
+
+    const publishTxHash = await sdk.streams.set(dataStreams)
+    console.log("\nPublish Tx Hash", publishTxHash)
+}

@@ -8,10 +8,10 @@ import Header from '@/components/layout/Header';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'StreamPay - Real-time Payment Streaming',
+  title: 'Lucidpay - Real-time Payment Streaming',
   description: 'True per-second money flows on Somnia blockchain with real-time updates',
   keywords: 'blockchain, streaming, payments, somnia, defi, real-time',
-  authors: [{ name: 'StreamPay Team' }],
+  authors: [{ name: 'Lucidpay Team' }],
   viewport: 'width=device-width, initial-scale=1',
   themeColor: '#0ea5e9',
 };

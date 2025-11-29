@@ -1,0 +1,234 @@
+Intro
+Introduction to Somnia Data Streams
+Somnia Data Streams is a structured data layer for EVM chains. Somnia Data streams enable developers to build applications that both emit EVM event logs and write data to the Somnia chain without Solidity. This means developers do not need to know Solidity to build applications using Somnia Data Streams. 
+
+Somnia Data streams allow parsing schema data into contract storage, where developers define a schema (a typed, ordered layout of fields), then publish and subscribe to data that conforms to that schema.
+
+Think of reading data from Streams as an emitted event, but with an SDK: publishers write strongly-typed records; subscribers read them by schema and publisher, and decode to rich objects.
+
+Why Streams?
+Traditional approaches each have trade-offs:
+
+Contract events are great for signaling, but untyped at the app level (you still write your own ABI and decoders across projects). Events are also hard to stitch into reusable data models.
+
+Custom contract storage is powerful but heavyweight, and you maintain the whole schema logic, CRUD, indexing patterns, and migrations.
+
+Off-chain DB and proofs are flexible but brittle; either centralized or require extra machinery.
+
+Oracles are useful for external data, but not a generic modeling layer for app-originated data.
+
+Streams solves this by standardizing:
+
+Schemas (the “data ABI”)
+
+Publish/Subscribe primitives (SDK, not boilerplate contracts)
+
+Deterministic IDs (schemaId, dataId) and provenance (publisher address)
+
+This results in interoperable, verifiable, composable data with minimal app code.
+
+When to Use Streams
+Use Streams when you need:
+
+Typed, shareable data across apps (chat messages, GPS, player stats, telemetry)
+
+Multiple publishers writing the same kind of record
+
+A standard decode flow with minimal custom indexing
+
+You need instant push to clients (Streams also works well with polling; you can add WS if desired)
+
+Avoid Streams if:
+
+You need complex transactional logic/state machines tightly bound to contract invariants (build a contract)
+
+You must store large blobs (store off-chain, publish references/URIs in Streams)
+
+Definition of Terms
+Schema: a canonical string describing fields in order, e.g.
+uint64 timestamp, bytes32 roomId, string content, string senderName, address sender
+The exact string determines a schemaId (hash).
+
+Publisher: The signer that writes data. EOA or Smart Contract that writes data under a schema. Readers trust provenance by address.
+
+Subscriber: reader that fetches all records for a (schemaId, publisher) pair.
+
+Data ID (dataId): developer-chosen 32-byte key per record (helps with lookups, dedup, pagination). Pick dataIds with predictable structure to enable point lookups or pagination seeds. E.g:
+
+Game: toHex('matchId-index', { size: 32 })
+
+Chat: toHex('room-timestamp', { size: 32 })
+
+GPS: toHex('device-epoch', { size: 32 })
+
+Encoder: converts typed values ⇄ bytes according to the schema.
+
+schemaId: computed from the schema string. Treat it like a contract address for data shape.
+
+Data flow 
+
+Copy
++-------------+        publishData(payload)         +--------------------+
+|  Publisher  |  -------------------------------->  | Somnia Streams L1  |
+|  (wallet)   |                                     |   (on-chain data)  |
++-------------+                                     +--------------------+
+       ^                                                     |
+       |                                     getAllPublisherDataForSchema
+       |                                                     v
++-------------+                                        +-----------+
+| Subscriber  |  <------------------------------------ |  Reader   |
+| (frontend)  |                                        | (SDK)     |
++-------------+                                        +-----------+
+You can have multiple publishers writing under the same schema; subscribers can aggregate them if desired.
+
+The Schema: Your “Data ABI”
+A schema is a compact, ordered list of typed fields. The exact string determines the computed schemaId Even whitespace and order matter.
+
+Design guidance
+
+Put stable fields first (e.g., timestamp, entityId, type).
+
+Prefer fixed-width ints (e.g., uint64 for timestamps).
+
+Use bytes32 for keys/IDs (room, device, etc.).
+
+Use string for human-readable info (names, messages), but keep it short for gas efficiency.
+
+Data Writing Patterns
+Single Publisher
+One server wallet publishes; User Interaces can read the schema using getByKey , getAtIndex , getAllPublisherDataForSchema.
+
+Multi-Publisher 
+Many devices publish under a shared schema. Your API aggregates across a list of publisher addresses.
+
+Derived Views
+Build REST endpoints that query Streams and derive higher-level views (e.g., “latest per room”).
+
+Quickstart in 5 Minutes
+You’ll register a schema, publish one message, and read it back — just to feel the flow.
+
+Install
+
+Copy
+npm i @somnia-chain/streams viem
+Set up Env
+
+Copy
+RPC_URL=https://dream-rpc.somnia.network
+PRIVATE_KEY=0xYOUR_FUNDED_PRIVATE_KEY
+Define Chain
+
+Copy
+// lib/chain.ts
+import { defineChain } from 'viem'
+export const somniaTestnet = defineChain({
+  id: 50312, name: 'Somnia Testnet', network: 'somnia-testnet',
+  nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+  rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] }, public: { http: ['https://dream-rpc.somnia.network'] } },
+} as const)
+Define Client
+
+Copy
+// lib/clients.ts
+import { createPublicClient, createWalletClient, http } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { somniaTestnet } from './chain'
+
+const RPC = process.env.RPC_URL as string
+const PK  = process.env.PRIVATE_KEY as `0x${string}`
+
+export const publicClient = createPublicClient({ chain: somniaTestnet, transport: http(RPC) })
+export const walletClient = createWalletClient({ account: privateKeyToAccount(PK), chain: somniaTestnet, transport: http(RPC) })
+Schema
+
+Copy
+// lib/schema.ts
+export const chatSchema =
+  'uint64 timestamp, bytes32 roomId, string content, string senderName, address sender'
+Register Schema (optional but recommended)
+Publish (Write)
+
+Copy
+// scripts/publish-one.ts
+import 'dotenv/config'
+import { SDK, SchemaEncoder } from '@somnia-chain/streams'
+import { publicClient, walletClient } from '../lib/clients'
+import { chatSchema } from '../lib/schema'
+import { toHex, type Hex } from 'viem'
+import { waitForTransactionReceipt } from 'viem/actions'
+
+async function main() {
+  const sdk = new SDK({ public: publicClient, wallet: walletClient })
+  const schemaId = await sdk.streams.computeSchemaId(chatSchema)
+  const enc = new SchemaEncoder(chatSchema)
+
+  const payload: Hex = enc.encodeData([
+    { name: 'timestamp',  value: Date.now().toString(),    type: 'uint64' },
+    { name: 'roomId',     value: toHex('general', { size: 32 }), type: 'bytes32' },
+    { name: 'content',    value: 'Hello Somnia!',          type: 'string' },
+    { name: 'senderName', value: 'Alice',                  type: 'string' },
+    { name: 'sender',     value: walletClient.account!.address, type: 'address' },
+  ])
+
+  const dataId = toHex(`general-${Date.now()}`, { size: 32 })
+  const tx = await sdk.streams.setAndEmitEvents(
+    [{ id: dataId, schemaId, data }],
+    [{ id: CHAT_EVENT_ID, argumentTopics: topics.slice(1), data: eventData }]
+  )
+
+  if (!tx) throw new Error('Failed to setAndEmitEvents')
+  await waitForTransactionReceipt(getPublicHttpClient(), { hash: tx })
+  return { txHash: tx }
+}
+main()
+ Read Data
+
+Copy
+// scripts/read-all.ts
+import 'dotenv/config'
+import { SDK } from '@somnia-chain/streams'
+import { publicClient } from '../lib/clients'
+import { chatSchema } from '../lib/schema'
+import { toHex } from 'viem'
+
+type Field = { name: string; type: string; value: any }
+const val = (f: Field) => f?.value?.value ?? f?.value
+
+async function main() {
+  const sdk = new SDK({ public: publicClient })
+  const schemaId = await sdk.streams.computeSchemaId(chatSchema)
+  const publisher = process.env.PUBLISHER as `0x${string}` || '0xYOUR_PUBLISHER_ADDR'
+
+  const rows = (await sdk.streams.getAllPublisherDataForSchema(schemaId, publisher)) as Field[][]
+  const want = toHex('general', { size: 32 }).toLowerCase()
+
+  for (const r of rows || []) {
+    const ts = Number(val(r[0]))
+    const ms = String(ts).length <= 10 ? ts * 1000 : ts
+    if (String(val(r[1])).toLowerCase() !== want) continue
+    console.log({
+      time: new Date(ms).toLocaleString(),
+      content: String(val(r[2])),
+      senderName: String(val(r[3])),
+      sender: String(val(r[4])),
+    })
+  }
+}
+main()
+That’s your first end-to-end loop.
+
+FAQs
+Q: Do I need to register a schema?
+A: Registration is optional but recommended. You can publish to an unregistered schema (readers just need the exact string to decode). Registration helps discoverability and tooling.
+
+Q: Can I change a schema later?
+A: Changing order or types yields a new schemaId. Plan for versioning (run v1 + v2 together).
+
+Q: How do I page data?
+A: Use structured dataIds, or build a thin index off-chain that records block numbers / tx hashes per record.
+
+Q: How does Streams differ from subgraphs?
+A: Streams defines how you write/read structured records with an SDK. Subgraphs (or other indexers) sit on top to query across many publishers, paginate, and filter efficiently.
+
+Q: How do I handle large payloads?
+A: Store the payload elsewhere (IPFS, Arweave, S3) and put the URI + hash in Streams. Optionally encrypt off-chain.

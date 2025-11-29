@@ -1,0 +1,358 @@
+Tutorial 1
+Build a Minimal On-Chain Chat App
+In this Tutorial, you’ll build a tiny chat app where messages are published on-chain using the Somnia Data Streams SDK and then read back using a Subscriber pattern (fixed schema ID and publisher). The User Interface updates with simple polling and does not rely on  WebSocket.
+
+We will build a Next.js project using app router and Typescript, and create a simple chat schema for messages. Using Somnia Data Streams, we will create a publisher API that writes to the Somnia chain and create a Subscriber API that reads from the Somnia chain by schemaId and publisher. The User Interface will poll new messages every few seconds.
+
+Prerequisites
+Node.js 18+ and npm
+
+A funded Somnia Testnet wallet. Kindly get some from the Faucet.
+
+Basic familiarity with TypeScript and Next.js
+
+Project Setup
+Create the app by creating a directory where the app will live
+
+
+Copy
+npx create-next-app@latest somnia-chat --ts --app --no-tailwind
+cd somnia-chat
+Install the Somnia Streams and ViemJS dependencies
+
+
+Copy
+npm i @somnia-chain/streams viem
+Somnia Data Streams is a Typescript SDK with methods that power off-chain reactivity. The application requires the ViemJS provider and wallet methods to enable queries over https embedded in the Somnia Data Streams SDK.
+
+viem is a web3 library for the JS/TS ecosystem that simplifies reading and writing data from the Somnia chain. Importantly, it detaches wallets (and sensitive info) from the SDS SDK
+Set up the TypeScript environment by running the command:
+
+
+Copy
+npm i -D @types/node
+Next.js provides a simple, full-stack environment.
+
+Configure environment variables
+Create .env.local file.  
+
+
+Copy
+RPC_URL=https://dream-rpc.somnia.network
+PRIVATE_KEY=0xYOUR_FUNDED_PRIVATE_KEY
+CHAT_PUBLISHER=0xYOUR_WALLET_ADDRESS
+The RPC_URL establishes the connection to Somnia Testnet, and the PRIVATE_KEY is used to sign and publish transactions. Note that it is kept server-side only. CHAT_PUBLISHER define what the Subscriber reads.
+
+Never expose PRIVATE_KEY to the browser. Keep all publishing code in API routes or server code only.
+
+NOTE: You can connect a Privy Wallet (or equivalent) to the SDK, avoiding the need entirely for private keys
+
+Chain Configuration
+Create a lib folder and define the Somnia Testnet chain. This tells viem which chain we’re on, so clients know the RPC and formatting rules. src/lib/chain.ts
+
+
+Copy
+import { defineChain } from 'viem'
+export const somniaTestnet = defineChain({
+  id: 50312,
+  name: 'Somnia Testnet',
+  network: 'somnia-testnet',
+  nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://dream-rpc.somnia.network'], 
+               webSocket: ['wss://dream-rpc.somnia.network/ws'] },
+    public:  { http: ['https://dream-rpc.somnia.network'],
+               webSocket: ['wss://dream-rpc.somnia.network/ws'] },
+  },
+} as const)
+SDK Clients
+Create public and wallet clients. Public client read-only RPC calls, and the Wallet client publishes transactions signed with your server wallet. We intentionally don’t set up WebSocket clients since we’re using polling for the User Interface. Create a file clients src/lib/clients.ts
+
+
+Copy
+import { createPublicClient, createWalletClient, http } from 'viem'
+import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts'
+import { somniaTestnet } from './chain'
+
+export function getPublicHttpClient() {
+  return createPublicClient({
+    chain: somniaTestnet,
+    transport: http(RPC_URL),
+  })
+}
+
+export function getWalletClient() {
+  return createWalletClient({
+    account: privateKeyToAccount(need('PRIVATE_KEY') as `0x${string}`),
+    chain: somniaTestnet,
+    transport: http(RPC_URL),
+  })
+}
+
+export const publisherAddress = () => getAccount().address
+Schema
+Chat schema is the structure of each message. This ordered list of typed fields defines how messages are encoded/decoded on-chain. Create a file chatSchema src/lib/chatSchema.ts
+
+
+Copy
+export const chatSchema = 'uint64 timestamp, bytes32 roomId, string content, string senderName, address sender'
+Chat Service
+We’ll build chatService.ts in small pieces so it’s easy to follow.
+
+Imports and helpers
+
+Copy
+import { SDK, SchemaEncoder, zeroBytes32 } from '@somnia-chain/streams'
+import { getPublicHttpClient, getWalletClient, publisherAddress } from './clients'
+import { waitForTransactionReceipt } from 'viem/actions'
+import { toHex, type Hex } from 'viem'
+import { chatSchema } from './chatSchema'
+
+const encoder = new SchemaEncoder(chatSchema)
+
+const sdk = new SDK({
+  public: getPublicHttpClient(),
+  wallet: getWalletClient(),
+})
+SchemaEncoder handles encoding/decoding for the exact schema string.
+
+getSdk(true) attaches the wallet client for publishing; read-only otherwise.
+
+assertHex ensures transaction hashes are hex strings.
+
+Ensure the schema is registered
+
+Copy
+// Register schema
+  const schemaId = await sdk.streams.computeSchemaId(chatSchema)
+  const isRegistered = await sdk.streams.isDataSchemaRegistered(schemaId)
+  if (!isRegistered) {
+    const ignoreAlreadyRegistered = true
+    const txHash = await sdk.streams.registerDataSchemas(
+      [{ schemaName: 'chat', schema: chatSchema, parentSchemaId: zeroBytes32 }],
+      ignoreAlreadyRegistered
+    )
+    if (!txHash) throw new Error('Failed to register schema')
+    await waitForTransactionReceipt(getPublicHttpClient(), { hash: txHash })
+  }
+If this schema wasn’t registered yet, we register it once. It’s safe to call this before sending the first message.
+
+Publish a message
+
+Copy
+const now = Date.now().toString()
+  const roomId = toHex(room, { size: 32 })
+  const data: Hex = encoder.encodeData([
+    { name: 'timestamp', value: now, type: 'uint64' },
+    { name: 'roomId', value: roomId, type: 'bytes32' },
+    { name: 'content', value: content, type: 'string' },
+    { name: 'senderName', value: senderName, type: 'string' },
+    { name: 'sender', value: getWalletClient().account.address, type: 'address' },
+  ])
+
+  const dataId = toHex(`${room}-${now}`, { size: 32 })
+  const tx = await sdk.streams.set([{ id: dataId, schemaId, data }])
+  if (!tx) throw new Error('Failed to publish chat message')
+  await waitForTransactionReceipt(getPublicHttpClient(), { hash: tx })
+  return { txHash: tx }
+We encode fields in the exact order specified in the schema.
+
+setAndEmitEvents writes the encoded payload.
+
+The sendMessage function publishes a structured chat message to Somnia Data Streams while simultaneously emitting an event that can be captured in real time by subscribers. It creates a schema encoder for the chat message structure, encodes the message data, and prepares event topics for the ChatMessage event. Then, with a single setAndEmitEvents() transaction, it both stores the message and emits an event on-chain. Once the transaction is confirmed, the function returns the transaction hash, confirming the message was successfully written to the network. Complete code below:
+
+Read Messages
+Create a chatMessages.ts file to write the script for reading messages.
+
+getAllPublisherDataForSchema reads all publisher data for your (schemaId, publisher).
+
+The fetchChatMessages function connects to the Somnia Data Streams SDK using a public client and derives the schema ID from the local chat schema. It then retrieves all data entries published by the specified wallet for that schema, decodes them into readable message objects, and filters them by room if a name is provided. Each message is timestamped, ordered chronologically, and limited to a given count before being returned. The result is a clean, decoded list of on-chain messages. Complete code below:
+
+API Routes
+To parse the data to the NextJS UI, we will create API route files that will enable us to call sendMessage and  fetchChatMessages functions
+
+Write Messages Endpoint 
+src/app/api/send/route.ts
+
+
+Copy
+import { NextResponse } from 'next/server'
+import { sendMessage } from '@/lib/chatService'
+
+export async function POST(req: Request) {
+  try {
+    const { room, content, senderName } = await req.json()
+    if (!room || !content) throw new Error('Missing fields')
+    const { txHash } = await sendMessage(room, content, senderName)
+    return NextResponse.json({ success: true, txHash })
+  } catch (e: any) {
+    console.error(e)
+    return NextResponse.json({ error: e.message || 'Failed to send' }, { status: 500 })
+  }
+}
+Publishes messages with the server wallet. We validate the input and return the tx hash.
+
+Frontend 
+Update src/app/page.tsx  Connect the Somnia Data Streams logic to a simple frontend. Fetch messages stored on-chain, display them in real time, and send new ones.
+
+Component Setup
+
+Copy
+use client'
+import { useState } from 'react'
+import { useChatMessages } from '@/lib/chatMessages'
+
+export default function Page() {
+  const [room, setRoom] = useState('general')
+  const [content, setContent] = useState('')
+  const [senderName, setSenderName] = useState('Victory')
+  const [error, setError] = useState<string | null>(null)
+
+  const {
+    messages,
+    loading,
+    error: fetchError,
+    reload,
+  } = useChatMessages(room, 200)
+
+  // --- Send new message via API route ---
+  async function send() {
+    try {
+      if (!content.trim()) {
+        setError('Message content cannot be empty')
+        return
+      }
+
+      const res = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ room, content, senderName }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to send message')
+
+      setContent('')
+      setError(null)
+      reload() // refresh after sending
+    } catch (e: any) {
+      console.error('❌ Send message failed:', e)
+      setError(e?.message || 'Failed to send message')
+    }
+  }
+room, content, and senderName store user input.
+
+useChatMessages(room, 200) reads the latest 200 messages from Somnia Data Streams using a read-only SDK instance.
+The hook automatically polls for new messages every few seconds.
+
+The send() function publishes a new message by calling the /api/send endpoint, which writes on-chain using sdk.streams.setAndEmitEvents().
+After a message is successfully sent, the input clears and reload() is called to refresh the messages list.
+
+The hook handles loading and error states internally, while the component keeps a separate error state for send failures.
+
+UI Rendering
+
+Copy
+  return (
+    <main style={{ padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+      <h1>💬 Somnia Streams Chat (read-only)</h1>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <input
+          value={room}
+          onChange={(e) => setRoom(e.target.value)}
+          placeholder="room"
+        />
+        <input
+          value={senderName}
+          onChange={(e) => setSenderName(e.target.value)}
+          placeholder="name"
+        />
+        <button onClick={reload} disabled={loading}>
+          Refresh
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          style={{ flex: 1 }}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Type a message"
+        />
+        <button onClick={send}>Send</button>
+      </div>
+
+      {(error || fetchError) && (
+        <div style={{ color: 'crimson', marginBottom: 12 }}>
+          Error: {error || fetchError}
+        </div>
+      )}
+
+      {loading ? (
+        <p>Loading messages...</p>
+      ) : !messages.length ? (
+        <p>No messages yet.</p>
+      ) : (
+        <ul style={{ paddingLeft: 16 }}>
+          {messages.map((m, i) => (
+            <li key={i}>
+              <small>{new Date(m.timestamp).toLocaleTimeString()} </small>
+              <b>{m.senderName || m.sender}</b>: {m.content}
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
+  )
+}
+The top input fields let users change the chat room or display name, and manually refresh messages if needed.
+
+The second input and Send button allow posting new messages.
+
+Error messages appear in red if either sending or fetching fails.
+
+Below, the app dynamically renders one of three states:
+
+“Loading messages…” while fetching.
+
+“No messages yet.” if the room is empty.
+
+A chat list showing messages with timestamps, names, and content.
+
+Each message represents on-chain data fetched via Somnia Data Streams, fully verified, timestamped, and appended as part of the schema structure. We clear the input and trigger a delayed refresh so the message appears soon after mining. 
+
+How It Works
+This component bridges the Somnia SDK’s on-chain capabilities with React’s reactive rendering model.
+Whenever the user sends a message, the SDK publishes it to Somnia Data Streams via the backend /api/send route.
+Meanwhile, useChatMessages polls the blockchain for updates, decoding structured data stored by the same schema.
+As a result, each message displayed in the chat window is a verifiable blockchain record, yet the experience feels as fluid and fast as a typical Web2 chat.
+
+
+Copy
++-----------+       +--------------------+      +---------------------+
+|  User UI  | --->  |  Next.js API /send | ---> | Somnia Data Streams |
++-----------+       +--------------------+      +---------------------+
+      ^                       |                           |
+      |                       v                           |
+      |             +------------------+                  |
+      |             |   Blockchain     |                  |
+      |             |  (Transaction)   |                  |
+      |             +------------------+                  |
+      |                       |                           |
+      |<----------------------|                           |
+      |     Poll via SDK or Subscribe (useChatMessages)   |
+      +---------------------------------------------------+
+Complete code below:
+
+Run the App
+Run the program using the command:
+
+
+Copy
+npm run dev
+Your app will be LIVE at http://localhost:3000 in your browser
+
+Tip
+
+Open two browser windows to simulate two users watching the same room. Both will see new messages as the poller fetches fresh data.

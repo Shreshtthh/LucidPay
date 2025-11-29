@@ -9,18 +9,18 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { somniaTestnet } from "../lib/contracts"; 
-import { STREAM_PAY_ABI } from "../lib/abis/StreamPay"; 
+import { LUCIDPAY_ABI } from "../lib/abis/StreamPay"; 
 import { optimizeBatching, Stream } from "./batch-optimizer";
 import { initializeSDK, publishKeeperLog } from '../lib/streams';
 // import { saveKeeperLog, initializeDatabase } from "../lib/db";
 
 // 1. LOAD ENV VARS
-const STREAM_PAY_ADDRESS = process.env.STREAM_PAY_ADDRESS as `0x${string}`;
+const LUCIDPAY_ADDRESS = process.env.LUCIDPAY_ADDRESS as `0x${string}`;
 const SOMNIA_RPC_URL = process.env.SOMNIA_RPC_URL || "https://dream-rpc.somnia.network";
 const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY as `0x${string}`;
 
-if (!STREAM_PAY_ADDRESS || !KEEPER_PRIVATE_KEY) {
-  throw new Error("Missing STREAM_PAY_ADDRESS or KEEPER_PRIVATE_KEY in .env file");
+if (!LUCIDPAY_ADDRESS || !KEEPER_PRIVATE_KEY) {
+  throw new Error("Missing LUCIDPAY_ADDRESS or KEEPER_PRIVATE_KEY in .env file");
 }
 
 // 2. SETUP VIEM CLIENTS
@@ -43,7 +43,7 @@ const sdk = initializeSDK(publicClient, walletClient);
 console.log("🤖 Intelligent Keeper Agent Started");
 console.log(`🤖 Keeper wallet: ${account.address}`);
 console.log(`📡 Connected to: ${SOMNIA_RPC_URL}`);
-console.log(`🎯 Watching contract: ${STREAM_PAY_ADDRESS}`);
+console.log(`🎯 Watching contract: ${LUCIDPAY_ADDRESS}`);
 
 /**
  * Main intelligent keeper bot
@@ -57,8 +57,8 @@ async function runIntelligentKeeper() {
     try {
       // 1. GET ACTIVE STREAMS
       const activeStreamIds = await publicClient.readContract({
-        address: STREAM_PAY_ADDRESS,
-        abi: STREAM_PAY_ABI,
+        address: LUCIDPAY_ADDRESS,
+        abi: LUCIDPAY_ABI,
         functionName: "getActiveStreamIds",
       }) as bigint[];
 
@@ -137,8 +137,8 @@ async function runIntelligentKeeper() {
           // Use viem's writeContract
           const hash = await walletClient.writeContract({
             account,
-            address: STREAM_PAY_ADDRESS,
-            abi: STREAM_PAY_ABI,
+            address: LUCIDPAY_ADDRESS,
+            abi: LUCIDPAY_ABI,
             functionName: 'batchUpdateStreams',
             args: [batch.streamIds.map(id => BigInt(id))] // Ensure args are bigints
           });

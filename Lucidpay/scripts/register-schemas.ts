@@ -64,7 +64,7 @@ async function registerSchemas() {
     const ignoreRegistered = true;
     const keeperTxHash = await sdk.streams.registerDataSchemas(
       [{
-        schemaName: "StreamPay_Keeper_Log_v1",
+        schemaName: "Lucidpay_Keeper_Log_v1",
         schema: KEEPER_LOG_SCHEMA_DEF,
         parentSchemaId: zeroBytes32 as Hex
       }],
@@ -72,7 +72,7 @@ async function registerSchemas() {
     );
     
     console.log(`✅ Keeper Log Schema registered`);
-    console.log(`   Schema Name: StreamPay_Keeper_Log_v1`);
+    console.log(`   Schema Name: Lucidpay_Keeper_Log_v1`);
     console.log(`   Schema Definition: ${KEEPER_LOG_SCHEMA_DEF}`);
     console.log(`   Schema ID: ${keeperSchemaId}`);
     console.log(`   Tx Hash: ${keeperTxHash}\n`);
@@ -83,7 +83,7 @@ async function registerSchemas() {
     
     const streamTxHash = await sdk.streams.registerDataSchemas(
       [{
-        schemaName: "StreamPay_Update_v1",
+        schemaName: "Lucidpay_Update_v1",
         schema: STREAM_UPDATE_SCHEMA_DEF,
         parentSchemaId: zeroBytes32 as Hex
       }],
@@ -91,7 +91,7 @@ async function registerSchemas() {
     );
     
     console.log(`✅ Stream Update Schema registered`);
-    console.log(`   Schema Name: StreamPay_Update_v1`);
+    console.log(`   Schema Name: Lucidpay_Update_v1`);
     console.log(`   Schema Definition: ${STREAM_UPDATE_SCHEMA_DEF}`);
     console.log(`   Schema ID: ${streamSchemaId}`);
     console.log(`   Tx Hash: ${streamTxHash}\n`);

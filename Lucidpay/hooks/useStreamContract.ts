@@ -1,6 +1,6 @@
 import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts';
-import { STREAM_PAY_ABI } from '@/lib/abis/StreamPay';
+import { LUCIDPAY_ABI } from '@/lib/abis/StreamPay';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -19,8 +19,8 @@ export type StreamInfo = {
 
 export function useStreamInfo(streamId: number | undefined) {
   const { data, isError, isLoading, refetch } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getStreamInfo',
     args: streamId !== undefined ? [BigInt(streamId)] : undefined,
     query: {
@@ -49,9 +49,9 @@ export function useStreamInfo(streamId: number | undefined) {
 }
 
 export function useUserStreams(userAddress: `0x${string}` | undefined) { // FIXED: Proper address type
-  const { data: sentStreams } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+  const { data: stream } = useReadContract({
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getUserStreams',
     args: userAddress ? [userAddress] : undefined, // This will now be properly typed
     query: {
@@ -60,9 +60,9 @@ export function useUserStreams(userAddress: `0x${string}` | undefined) { // FIXE
     },
   });
 
-  const { data: receivedStreams } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+  const { data: activeStreamIds } = useReadContract({
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getRecipientStreams',
     args: userAddress ? [userAddress] : undefined, // This will now be properly typed
     query: {
@@ -79,8 +79,8 @@ export function useUserStreams(userAddress: `0x${string}` | undefined) { // FIXE
 
 export function useProtocolStats() {
   const { data, isLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getProtocolStats',
     query: {
       refetchInterval: 10000, // Update every 10 seconds
@@ -101,8 +101,8 @@ export function useProtocolStats() {
 
 export function useActiveStreams() {
   const { data, isLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getActiveStreamIds',
     query: {
       refetchInterval: 5000,
@@ -132,11 +132,11 @@ export function useCreateStream() {
         streamType,
         description,
         amount: amount.toString(),
-        contractAddress: CONTRACT_ADDRESSES.STREAM_PAY
+        contractAddress: CONTRACT_ADDRESSES.LUCIDPAY
       });
 
       // Validate inputs
-      if (!CONTRACT_ADDRESSES.STREAM_PAY) {
+      if (!CONTRACT_ADDRESSES.LUCIDPAY) {
         throw new Error('Contract address not configured');
       }
       
@@ -149,8 +149,8 @@ export function useCreateStream() {
       }
 
       const hash = await writeContract({
-        address: CONTRACT_ADDRESSES.STREAM_PAY,
-        abi: STREAM_PAY_ABI,
+        address: CONTRACT_ADDRESSES.LUCIDPAY,
+        abi: LUCIDPAY_ABI,
         functionName: 'createStream',
         args: [recipient, BigInt(duration), streamType, description],
         value: amount,
@@ -189,8 +189,8 @@ export function useWithdrawFromStream() {
   const withdrawFromStream = async (streamId: number) => {
     try {
       const hash = await writeContract({
-        address: CONTRACT_ADDRESSES.STREAM_PAY,
-        abi: STREAM_PAY_ABI,
+        address: CONTRACT_ADDRESSES.LUCIDPAY,
+        abi: LUCIDPAY_ABI,
         functionName: 'withdrawFromStream',
         args: [BigInt(streamId)],
       });
@@ -216,8 +216,8 @@ export function useCancelStream() {
   const cancelStream = async (streamId: number) => {
     try {
       const hash = await writeContract({
-        address: CONTRACT_ADDRESSES.STREAM_PAY,
-        abi: STREAM_PAY_ABI,
+        address: CONTRACT_ADDRESSES.LUCIDPAY,
+        abi: LUCIDPAY_ABI,
         functionName: 'cancelStream',
         args: [BigInt(streamId)],
       });
@@ -242,8 +242,8 @@ export function useStreamEvents() {
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
 
   useWatchContractEvent({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     eventName: 'StreamCreated',
     onLogs(logs) {
       logs.forEach(log => {
@@ -257,8 +257,8 @@ export function useStreamEvents() {
   });
 
   useWatchContractEvent({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     eventName: 'Withdrawn',
     onLogs(logs) {
       logs.forEach(log => {
@@ -271,8 +271,8 @@ export function useStreamEvents() {
   });
 
   useWatchContractEvent({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     eventName: 'StreamCancelled',
     onLogs(logs) {
       logs.forEach(log => {
@@ -290,8 +290,8 @@ export function useStreamEvents() {
 // Hook for real-time balance updates
 export function useRealTimeBalance(streamId: number | undefined) {
   const { data: contractBalance, refetch: refetchBalance } = useReadContract({
-    address: CONTRACT_ADDRESSES.STREAM_PAY,
-    abi: STREAM_PAY_ABI,
+    address: CONTRACT_ADDRESSES.LUCIDPAY,
+    abi: LUCIDPAY_ABI,
     functionName: 'getCurrentBalance',
     args: streamId !== undefined ? [BigInt(streamId)] : undefined,
     query: {

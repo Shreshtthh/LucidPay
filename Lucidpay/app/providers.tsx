@@ -13,7 +13,7 @@ import { Toaster } from 'react-hot-toast';
 import { somniaTestnet } from '@/lib/contracts';
 
 const config = getDefaultConfig({
-  appName: 'StreamPay',
+  appName: 'Lucidpay',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'default-project-id',
   chains: [somniaTestnet],
   ssr: true, // If your dApp uses server side rendering (SSR)
@@ -50,7 +50,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             borderRadius: 'medium',
           })}
           appInfo={{
-            appName: 'StreamPay',
+            appName: 'Lucidpay',
             learnMoreUrl: 'https://somnia.network',
           }}
         >
