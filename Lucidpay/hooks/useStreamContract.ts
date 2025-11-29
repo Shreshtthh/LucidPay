@@ -49,7 +49,7 @@ export function useStreamInfo(streamId: number | undefined) {
 }
 
 export function useUserStreams(userAddress: `0x${string}` | undefined) { // FIXED: Proper address type
-  const { data: stream } = useReadContract({
+  const { data: sentStreams } = useReadContract({
     address: CONTRACT_ADDRESSES.LUCIDPAY,
     abi: LUCIDPAY_ABI,
     functionName: 'getUserStreams',
@@ -60,7 +60,7 @@ export function useUserStreams(userAddress: `0x${string}` | undefined) { // FIXE
     },
   });
 
-  const { data: activeStreamIds } = useReadContract({
+  const { data: receivedStreams } = useReadContract({
     address: CONTRACT_ADDRESSES.LUCIDPAY,
     abi: LUCIDPAY_ABI,
     functionName: 'getRecipientStreams',

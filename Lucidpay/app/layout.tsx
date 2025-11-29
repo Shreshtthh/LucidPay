@@ -12,7 +12,11 @@ export const metadata: Metadata = {
   description: 'True per-second money flows on Somnia blockchain with real-time updates',
   keywords: 'blockchain, streaming, payments, somnia, defi, real-time',
   authors: [{ name: 'Lucidpay Team' }],
-  viewport: 'width=device-width, initial-scale=1',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
   themeColor: '#0ea5e9',
 };
 
