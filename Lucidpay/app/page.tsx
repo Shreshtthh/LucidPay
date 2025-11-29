@@ -297,7 +297,7 @@ export default function Dashboard() {
               {sentStreams && sentStreams.length > 0 ? (
                 <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
                   {/* --- FIX IS HERE --- */}
-                  {sentStreams.slice().reverse().map((streamId) => (
+                  {sentStreams.slice().reverse().map((streamId: number) => (
                     <StreamCard key={streamId} streamId={streamId} isReceived={false} />
                   ))}
                   {/* --- END OF FIX --- */}
@@ -332,7 +332,7 @@ export default function Dashboard() {
               {receivedStreams && receivedStreams.length > 0 ? (
                 <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
                   {/* --- FIX IS HERE --- */}
-                  {receivedStreams.slice().reverse().map((streamId) => (
+                  {receivedStreams.slice().reverse().map((streamId: number) => (
                     <StreamCard key={streamId} streamId={streamId} isReceived={true} />
                   ))}
                   {/* --- END OF FIX --- */}
