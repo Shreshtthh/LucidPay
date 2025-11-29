@@ -1,3 +1,19 @@
+/**
+ * ⚠️ DEPRECATED: This file is no longer used
+ * 
+ * All keeper logs are now stored on-chain via Somnia Data Streams.
+ * See: lib/streams.ts and hooks/useStreamData.ts
+ * 
+ * Migration: Keeper decisions are published to transparent, verifiable
+ * on-chain streams instead of centralized database.
+ * 
+ * Benefits:
+ * - Real-time WebSocket updates (no polling)
+ * - Transparent AI decision-making (publicly verifiable)
+ * - Eliminates database dependency
+ * - Sub-100ms latency
+ */
+
 import { sql } from "@vercel/postgres";
 
 /**
