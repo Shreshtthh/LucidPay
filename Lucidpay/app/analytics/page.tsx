@@ -76,7 +76,7 @@ export default function AnalyticsPage() {
           Analytics Dashboard
         </h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          Real-time insights into Lucidpay protocol performance, usage patterns, and network statistics.
+          Real-time insights into LucidPay protocol performance, usage patterns, and network statistics.
         </p>
       </motion.div>
 

@@ -1,4 +1,4 @@
-// lucidpay/app/api/check-fraud/route.ts
+// LucidPay/app/api/check-fraud/route.ts
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';

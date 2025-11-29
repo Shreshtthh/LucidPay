@@ -1,4 +1,4 @@
-export const LUCIDPAY_ABI = [
+export const LucidPay_ABI = [
     {
       "inputs": [
         {

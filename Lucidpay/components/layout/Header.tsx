@@ -44,7 +44,7 @@ export default function Header() {
             </div>
           </div>
           <span className="font-bold text-xl bg-gradient-to-r from-somnia-500 to-somnia-700 bg-clip-text text-transparent">
-            StreamPay
+            LucidPay
           </span>
         </Link>
 

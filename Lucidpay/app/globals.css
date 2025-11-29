@@ -58,7 +58,7 @@
   }
 }
 
-/* Custom animations for Lucidpay */
+/* Custom animations for LucidPay */
 @keyframes stream-flow {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }

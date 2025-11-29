@@ -89,7 +89,7 @@ export default function Dashboard() {
           </div>
           
           <h1 className="text-3xl font-bold mb-4 bg-gradient-to-r from-somnia-500 to-somnia-700 bg-clip-text text-transparent">
-            Welcome to Lucidpay
+            Welcome to LucidPay
           </h1>
           <p className="text-muted-foreground mb-8">
             Connect your wallet to start streaming payments in real-time on Somnia blockchain
