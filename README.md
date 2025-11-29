@@ -129,17 +129,16 @@ npm install
 Create a `.env` file:
 
 ```bash
-# Blockchain Config
-SOMNIA_RPC_URL="https://dream-rpc.somnia.network"
-PRIVATE_KEY="your_wallet_private_key" # For deployment
-KEEPER_PRIVATE_KEY="your_keeper_key"  # For the AI Agent
+NEXT_PUBLIC_LucidPay_ADDRESS=
+NEXT_PUBLIC_STREAM_KEEPER_ADDRESS=	
+NEXT_PUBLIC_STREAM_FACTORY_ADDRESS=
+GEMINI_API_KEY=
+KEEPER_PRIVATE_KEY=
+LucidPay_ADDRESS=
 
-# AI Config
-GEMINI_API_KEY="your_google_ai_key"
-
-# Contract Addresses (After deployment)
-NEXT_PUBLIC_STREAM_PAY_ADDRESS=""
-```
+#Somnia Data Streams
+NEXT_PUBLIC_SOMNIA_NETWORK=testnet
+SOMNIA_STREAMS_API_KEY=
 
 ### 3. Register Data Schemas (One-time setup)
 This script uses the SDK to register the KeeperLog schema on-chain.
