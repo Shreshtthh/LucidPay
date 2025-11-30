@@ -46,7 +46,7 @@ graph TD
 ## 🧠 The Data Schema
 We registered a custom schema on the Somnia Testnet to structure our AI's decision logs. This allows any indexer or UI to decode the agent's behavior.
 
-**Schema Name:** `Lucidpay_Keeper_Log_v1`
+**Schema Name:** `LucidPay_Keeper_Log_v1`
 
 **Definition:**
 ```solidity
@@ -120,8 +120,8 @@ Our NLP engine parses the intent and formats the transaction automatically.
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/shreshtthh/lucidpay.git
-cd lucidpay
+git clone https://github.com/shreshtthh/LucidPay.git
+cd LucidPay
 npm install
 ```
 
