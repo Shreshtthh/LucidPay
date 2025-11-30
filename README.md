@@ -4,6 +4,8 @@
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://lucid-pay.vercel.app/)
 [![Watch Demo](https://img.shields.io/badge/video-youtube-red)](https://youtu.be/CuY0QMgi2tE)
 
+LucidPay is built on the solid foundation of the StreamPay protocol. While StreamPay solved the problem of continuous payments, it suffered from the 'Black Box' problem of opaque automation. We forked the core contracts and revolutionized the infrastructure by integrating Somnia Data Streams and Google Gemini to create the first 'Glass Box' AI payment agent
+
 > **Your money just woke up.** LucidPay is a real-time payment streaming protocol powered by Somnia Data Streams. Unlike passive streams, our on-chain AI agent actively optimizes transactions and broadcasts its decision-making process in real-time. Transparent, instant, and alive.
 
 ---
@@ -50,7 +52,7 @@ Every time our Intelligent Keeper wakes up, it:
 - **Publishes this entire decision process to a Somnia Data Stream**
 
 #### ⚡ **Zero-Latency UI**
-The frontend subscribes to these streams via WebSocket. Instead of polling the blockchain, users see:
+The frontend subscribes to these streams via polling. In production, however, we'll be working towards a web-sockets oriented approach. The users see- 
 - The AI's real-time activity
 - Stream updates the instant they happen
 - The keeper's reasoning for every decision
