@@ -7,6 +7,7 @@
 ![Somnia Data Streams](https://img.shields.io/badge/Powered%20By-Somnia%20Data%20Streams-blueviolet) ![AI Agent](https://img.shields.io/badge/AI-Autonomous%20Keeper-blue) ![Status](https://img.shields.io/badge/Status-Live%20on%20Testnet-success)
 
 Live - https://lucid-pay.vercel.app/
+Demo Video - https://youtu.be/CuY0QMgi2tE
 
 ---
 
