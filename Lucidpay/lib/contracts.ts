@@ -2,7 +2,7 @@
 // This will be populated by the deploy script
 
 export const CONTRACT_ADDRESSES = {
-  LucidPay: process.env.NEXT_PUBLIC_LucidPay_ADDRESS as `0x${string}`,
+  LucidPay: process.env.NEXT_PUBLIC_LUCIDPAY_ADDRESS as `0x${string}`,
   STREAM_KEEPER: process.env.NEXT_PUBLIC_STREAM_KEEPER_ADDRESS as `0x${string}`,
   STREAM_FACTORY: process.env.NEXT_PUBLIC_STREAM_FACTORY_ADDRESS as `0x${string}`,
 } as const;
