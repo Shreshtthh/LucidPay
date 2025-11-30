@@ -162,7 +162,6 @@ The `intelligent-keeper.ts` script doesn't just run—it **communicates**.
 Using the `@somnia-chain/streams` SDK, our frontend hooks (`useStreamData.ts`) listen for these updates.
 
 **Benefits:**
-- ❌ **No Polling:** We removed `setInterval` loops for data fetching
 - ✅ **Instant Feedback:** Users see "AI Thinking..." and "Batch Executed" notifications pushed directly from the chain
 - ⚡ **Zero Latency:** Updates appear in milliseconds, not seconds
 
